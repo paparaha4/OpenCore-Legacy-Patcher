@@ -32,14 +32,14 @@ class NetworkUtilities:
     Utilities for network related tasks, primarily used for downloading files
     """
 
-    def __init__(self, url: str = None):
+    def __init__(self, url: str = None) -> None:
         self.url: str = url
 
         if self.url is None:
             self.url = "https://github.com"
 
 
-    def verify_network_connection(self):
+    def verify_network_connection(self) -> bool:
         """
         Verifies that the network is available
 
@@ -58,8 +58,13 @@ class NetworkUtilities:
         ):
             return False
 
-    def validate_link(self):
-        # Check if link is 404
+    def validate_link(self) -> bool:
+        """
+        Check for 404 error
+
+        Returns:
+            bool: True if link is valid, False otherwise
+        """
         try:
             response = SESSION.head(self.url, timeout=5, allow_redirects=True)
             if response.status_code == 404:
@@ -73,6 +78,65 @@ class NetworkUtilities:
             requests.exceptions.HTTPError
         ):
             return False
+
+
+    def get(self, url: str, **kwargs) -> requests.Response:
+        """
+        Wrapper for requests's get method
+        Implement additional error handling
+
+        Parameters:
+            url (str): URL to get
+            **kwargs: Additional parameters for requests.get
+
+        Returns:
+            requests.Response: Response object from requests.get
+        """
+
+        result: requests.Response = None
+
+        try:
+            result = SESSION.get(url, **kwargs)
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.TooManyRedirects,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.HTTPError
+        ) as error:
+            logging.warn(f"Error calling requests.get: {error}")
+            # Return empty response object
+            return requests.Response()
+
+        return result
+
+    def post(self, url: str, **kwargs) -> requests.Response:
+        """
+        Wrapper for requests's post method
+        Implement additional error handling
+
+        Parameters:
+            url (str): URL to post
+            **kwargs: Additional parameters for requests.post
+
+        Returns:
+            requests.Response: Response object from requests.post
+        """
+
+        result: requests.Response = None
+
+        try:
+            result = SESSION.post(url, **kwargs)
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.TooManyRedirects,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.HTTPError
+        ) as error:
+            logging.warn(f"Error calling requests.post: {error}")
+            # Return empty response object
+            return requests.Response()
+
+        return result
 
 
 class DownloadObject:
@@ -93,7 +157,7 @@ class DownloadObject:
 
     """
 
-    def __init__(self, url: str, path: str):
+    def __init__(self, url: str, path: str) -> None:
         self.url:       str = url
         self.status:    str = DownloadStatus.INACTIVE
         self.error_msg: str = ""
@@ -121,11 +185,11 @@ class DownloadObject:
             self._populate_file_size()
 
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.stop()
 
 
-    def download(self, display_progress: bool = False, spawn_thread: bool = True, verify_checksum: bool = False):
+    def download(self, display_progress: bool = False, spawn_thread: bool = True, verify_checksum: bool = False) -> None:
         """
         Download the file
 
@@ -139,10 +203,10 @@ class DownloadObject:
 
         """
         self.status = DownloadStatus.DOWNLOADING
-        logging.info(f"Starting download: {self.filename}")
+        logging.info(f"- Starting download: {self.filename}")
         if spawn_thread:
             if self.active_thread:
-                logging.error("Download already in progress")
+                logging.error("- Download already in progress")
                 return
             self.should_checksum = verify_checksum
             self.active_thread = threading.Thread(target=self._download, args=(display_progress,))
@@ -152,7 +216,8 @@ class DownloadObject:
         self.should_checksum = verify_checksum
         self._download(display_progress)
 
-    def download_simple(self, verify_checksum: bool = False):
+
+    def download_simple(self, verify_checksum: bool = False) -> str or bool:
         """
         Alternative to download(), mimics  utilities.py's old download_file() function
 
@@ -176,7 +241,7 @@ class DownloadObject:
         return self.checksum.hexdigest() if self.checksum else True
 
 
-    def _get_filename(self):
+    def _get_filename(self) -> str:
         """
         Get the filename from the URL
 
@@ -187,7 +252,7 @@ class DownloadObject:
         return Path(self.url).name
 
 
-    def _populate_file_size(self):
+    def _populate_file_size(self) -> None:
         """
         Get the file size of the file to be downloaded
 
@@ -201,12 +266,12 @@ class DownloadObject:
             else:
                 raise Exception("Content-Length missing from headers")
         except Exception as e:
-            logging.error(f"Error determining file size {self.url}: {str(e)}")
-            logging.error("Assuming file size is 0")
+            logging.error(f"- Error determining file size {self.url}: {str(e)}")
+            logging.error("- Assuming file size is 0")
             self.total_file_size = 0.0
 
 
-    def _update_checksum(self, chunk: bytes):
+    def _update_checksum(self, chunk: bytes) -> None:
         """
         Update checksum with new chunk
 
@@ -216,7 +281,7 @@ class DownloadObject:
         self._checksum_storage.update(chunk)
 
 
-    def _prepare_working_directory(self, path: Path):
+    def _prepare_working_directory(self, path: Path) -> bool:
         """
         Validates working enviroment, including free space and removing existing files
 
@@ -229,17 +294,17 @@ class DownloadObject:
 
         try:
             if Path(path).exists():
-                logging.info(f"Deleting existing file: {path}")
+                logging.info(f"- Deleting existing file: {path}")
                 Path(path).unlink()
                 return True
 
             if not Path(path).parent.exists():
-                logging.info(f"Creating directory: {Path(path).parent}")
+                logging.info(f"- Creating directory: {Path(path).parent}")
                 Path(path).parent.mkdir(parents=True, exist_ok=True)
 
-            available_space = utilities.get_free_space()
+            available_space = utilities.get_free_space(Path(path).parent)
             if self.total_file_size > available_space:
-                msg = f"Not enough free space to download {self.filename}, need {utilities.human_fmt(self.total_file_size)}, have {utilities.human_fmt(available_space)}"
+                msg = f"- Not enough free space to download {self.filename}, need {utilities.human_fmt(self.total_file_size)}, have {utilities.human_fmt(available_space)}"
                 logging.error(msg)
                 raise Exception(msg)
 
@@ -247,13 +312,13 @@ class DownloadObject:
             self.error = True
             self.error_msg = str(e)
             self.status = DownloadStatus.ERROR
-            logging.error(f"Error preparing working directory {path}: {self.error_msg}")
+            logging.error(f"- Error preparing working directory {path}: {self.error_msg}")
             return False
 
         return True
 
 
-    def _download(self, display_progress: bool = False):
+    def _download(self, display_progress: bool = False) -> None:
         """
         Download the file
 
@@ -272,7 +337,7 @@ class DownloadObject:
             if self._prepare_working_directory(self.filepath) is False:
                 raise Exception(self.error_msg)
 
-            response = SESSION.get(self.url, stream=True, timeout=10)
+            response = NetworkUtilities().get(self.url, stream=True, timeout=10)
 
             with open(self.filepath, 'wb') as file:
                 for i, chunk in enumerate(response.iter_content(1024 * 1024 * 4)):
@@ -286,27 +351,27 @@ class DownloadObject:
                         if display_progress and i % 100:
                             # Don't use logging here, as we'll be spamming the log file
                             if self.total_file_size == 0.0:
-                                print(f"Downloaded {utilities.human_fmt(self.downloaded_file_size)} of {self.filename}")
+                                print(f"- Downloaded {utilities.human_fmt(self.downloaded_file_size)} of {self.filename}")
                             else:
-                                print(f"Downloaded {self.get_percent():.2f}% of {self.filename} ({utilities.human_fmt(self.get_speed())}/s) ({self.get_time_remaining():.2f} seconds remaining)")
+                                print(f"- Downloaded {self.get_percent():.2f}% of {self.filename} ({utilities.human_fmt(self.get_speed())}/s) ({self.get_time_remaining():.2f} seconds remaining)")
                 self.download_complete = True
-                logging.info(f"Download complete: {self.filename}")
-                logging.info("Stats:")
-                logging.info(f"  Downloaded size: {utilities.human_fmt(self.downloaded_file_size)}")
-                logging.info(f"  Time elapsed: {(time.time() - self.start_time):.2f} seconds")
-                logging.info(f"  Speed: {utilities.human_fmt(self.downloaded_file_size / (time.time() - self.start_time))}/s")
-                logging.info(f"  Location: {self.filepath}")
+                logging.info(f"- Download complete: {self.filename}")
+                logging.info("- Stats:")
+                logging.info(f"-   Downloaded size: {utilities.human_fmt(self.downloaded_file_size)}")
+                logging.info(f"-   Time elapsed: {(time.time() - self.start_time):.2f} seconds")
+                logging.info(f"-   Speed: {utilities.human_fmt(self.downloaded_file_size / (time.time() - self.start_time))}/s")
+                logging.info(f"-   Location: {self.filepath}")
         except Exception as e:
             self.error = True
             self.error_msg = str(e)
             self.status = DownloadStatus.ERROR
-            logging.error(f"Error downloading {self.url}: {self.error_msg}")
+            logging.error(f"- Error downloading {self.url}: {self.error_msg}")
 
         self.status = DownloadStatus.COMPLETE
         utilities.enable_sleep_after_running()
 
 
-    def get_percent(self):
+    def get_percent(self) -> float:
         """
         Query the download percent
 
@@ -315,12 +380,12 @@ class DownloadObject:
         """
 
         if self.total_file_size == 0.0:
-            logging.error("File size is 0, cannot calculate percent")
+            logging.error("- File size is 0, cannot calculate percent")
             return -1
         return self.downloaded_file_size / self.total_file_size * 100
 
 
-    def get_speed(self):
+    def get_speed(self) -> float:
         """
         Query the download speed
 
@@ -331,7 +396,7 @@ class DownloadObject:
         return self.downloaded_file_size / (time.time() - self.start_time)
 
 
-    def get_time_remaining(self):
+    def get_time_remaining(self) -> float:
         """
         Query the time remaining for the download
 
@@ -340,12 +405,12 @@ class DownloadObject:
         """
 
         if self.total_file_size == 0.0:
-            logging.error("File size is 0, cannot calculate time remaining")
+            logging.error("- File size is 0, cannot calculate time remaining")
             return -1
         return (self.total_file_size - self.downloaded_file_size) / self.get_speed()
 
 
-    def get_file_size(self):
+    def get_file_size(self) -> float:
         """
         Query the file size of the file to be downloaded
 
@@ -356,7 +421,7 @@ class DownloadObject:
         return self.total_file_size
 
 
-    def is_active(self):
+    def is_active(self) -> bool:
         """
         Query if the download is active
 
@@ -369,12 +434,11 @@ class DownloadObject:
         return False
 
 
-    def stop(self):
+    def stop(self) -> None:
         """
         Stop the download
 
-        Returns:
-            boolean: If the download is active, this function will hold the thread until stopped
+        If the download is active, this function will hold the thread until stopped
         """
 
         self.should_stop = True

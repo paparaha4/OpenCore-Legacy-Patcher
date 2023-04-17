@@ -22,7 +22,7 @@ Regarding OS support, see below:
 
 | Support Entry | Supported OSes | Description | Comment |
 | :--- | :--- | :--- | :--- |
-| HostOS | macOS 10.9 - macOS 13 | Refers to OSes where running OpenCore-Patcher.app are supported | Supports 10.7+ if [Python 3.9 or higher](https://www.python.org/downloads/) is manually installed, simply run the `OpenCore-Patcher.command` located in the repo |
+| HostOS | macOS 10.9 - macOS 13 | Refers to OSes where running OpenCore-Patcher.app are supported | Supports 10.7+ if [Python 3.9 or higher](https://www.python.org/downloads/) is manually installed, simply run the `OpenCore-Patcher-GUI.command` located in the repo |
 | TargetOS | macOS 11 - macOS 13 | Refers to OSes that can be patched to run with OpenCore | May support 10.4 and newer (in a potentially broken state). No support provided. |
 
 ### MacBook
@@ -145,8 +145,8 @@ Regarding OS support, see below:
 | :--- | :--- | :--- | :--- |
 | MacPro1,1 | Mid-2006 | <span style="color:red"> NO </span> | 32-Bit Firmware limitation |
 | MacPro2,1 | Mid-2007 | ^^ | ^^ |
-| MacPro3,1 | Early 2008 | <span style="color:#30BCD5"> YES </span> | - UHCI/OHCI support in Public Beta, see current issues ([#1021](https://github.com/dortania/OpenCore-Legacy-Patcher/issesues/1021)) <br/>- Potential boot issues with stock Bluetooth card, recommend removing to avoid kernel panics |
-| MacPro4,1 | Early 2009 | ^^ | - Everything is supported as long as GPU is Metal capable <br/> - UHCI/OHCI support in Public Beta, see current issues ([#1021](https://github.com/dortania/OpenCore-Legacy-Patcher/issesues/1021))|
+| MacPro3,1 | Early 2008 | <span style="color:#30BCD5"> YES </span> | - UHCI/OHCI support in Public Beta, see current issues ([#1021](https://github.com/dortania/OpenCore-Legacy-Patcher/issues/1021)) <br/>- Potential boot issues with stock Bluetooth card, recommend removing to avoid kernel panics |
+| MacPro4,1 | Early 2009 | ^^ | - Everything is supported as long as GPU is Metal capable <br/> - UHCI/OHCI support in Public Beta, see current issues ([#1021](https://github.com/dortania/OpenCore-Legacy-Patcher/issues/1021))|
 | MacPro5,1 | Mid-2010, Mid-2012 | ^^ | ^^ |
 | MacPro6,1 | Late 2013 | ^^ | - CPU Power Management currently unsupported<br/> - No DRM support |
 

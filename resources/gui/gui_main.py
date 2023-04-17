@@ -3,27 +3,47 @@
 # Currently Work in Progress
 
 import plistlib
-import wx
-import sys
-import webbrowser
-import subprocess
-import time
+from pathlib import Path
+from datetime import datetime
+
 import os
+import sys
+import subprocess
+import threading
+
+import webbrowser
+
+import time
+
+import logging
+import tempfile
+
+import wx
 import wx.adv
 from wx.lib.agw import hyperlink
-import threading
-from pathlib import Path
-import binascii
-import hashlib
-from datetime import datetime
-import py_sip_xnu
-import logging
 
-from resources import constants, defaults, install, installer, utilities, run, generate_smbios, updates, integrity_verification, global_settings, kdk_handler, network_handler
+import py_sip_xnu
+
+from resources import (
+    constants,
+    defaults,
+    install,
+    utilities,
+    generate_smbios,
+    updates,
+    integrity_verification,
+    global_settings,
+    kdk_handler,
+    network_handler,
+    macos_installer_handler
+)
+
 from resources.sys_patch import sys_patch_detect, sys_patch
 from resources.build import build
-from data import model_array, os_data, smbios_data, sip_data, cpu_data
 from resources.gui import menu_redirect, gui_help
+
+from data import model_array, os_data, smbios_data, sip_data, cpu_data
+
 
 
 class wx_python_gui:
@@ -232,7 +252,7 @@ class wx_python_gui:
             if local_build_date <= installed_build_date:
                 return False
 
-        elif updates.check_binary_updates(self.constants).check_if_build_newer(local_version, application_version) is False:
+        elif updates.CheckBinaryUpdates(self.constants)._check_if_build_newer(local_version, application_version) is False:
             return False
 
         # Ask user if they want to move the application to the Applications folder
@@ -283,11 +303,11 @@ class wx_python_gui:
             return
 
         did_find_update = False
-        ignore_updates = global_settings.global_settings().read_property("IgnoreAppUpdates")
+        ignore_updates = global_settings.GlobalEnviromentSettings().read_property("IgnoreAppUpdates")
         if ignore_updates is not True:
             self.constants.ignore_updates = False
             self.constants.has_checked_updates = True
-            dict = updates.check_binary_updates(self.constants).check_binary_updates()
+            dict = updates.CheckBinaryUpdates(self.constants).check_binary_updates()
             if dict:
                 for entry in dict:
                     version = dict[entry]["Version"]
@@ -307,7 +327,7 @@ class wx_python_gui:
                     elif response == wx.ID_NO:
                         logging.info("- Setting IgnoreAppUpdates to True")
                         self.constants.ignore_updates = True
-                        global_settings.global_settings().write_property("IgnoreAppUpdates", True)
+                        global_settings.GlobalEnviromentSettings().write_property("IgnoreAppUpdates", True)
         else:
             self.constants.ignore_updates = True
             logging.info("- Ignoring App Updates due to defaults")
@@ -364,12 +384,12 @@ class wx_python_gui:
 
             # Header
             self.header = wx.StaticText(self.frame, label="Relaunching as root")
-            self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
             self.header.Centre(wx.HORIZONTAL)
 
             # Add count down label
             self.countdown_label = wx.StaticText(self.frame, label=f"Closing old process in {timer_val} seconds")
-            self.countdown_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            self.countdown_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
             # Set below header
             self.countdown_label.SetPosition(
                 (
@@ -380,7 +400,7 @@ class wx_python_gui:
             self.countdown_label.Centre(wx.HORIZONTAL)
             # Label: You can close this window if app finished relaunching
             self.countdown_label2 = wx.StaticText(self.frame, label="You can close this window if app finished relaunching")
-            self.countdown_label2.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            self.countdown_label2.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
             # Set below countdown label
             self.countdown_label2.SetPosition(
                 (
@@ -420,7 +440,7 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame, label="🚧 Not Yet Implemented")
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Return to main menu
@@ -451,12 +471,12 @@ class wx_python_gui:
         self.frame.SetTitle(f"OpenCore Legacy Patcher ({self.constants.patcher_version})")
         # Header
         self.header = wx.StaticText(self.frame, label=f"OpenCore Legacy Patcher v{self.constants.patcher_version}")
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader
         self.subheader = wx.StaticText(self.frame, label=f"Model: {self.constants.custom_model or self.computer.real_model}")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -543,7 +563,7 @@ class wx_python_gui:
 
         # Copyright Label
         self.copyright = wx.StaticText(self.frame, label=self.constants.copyright_date)
-        self.copyright.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.copyright.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.copyright.SetPosition(
             wx.Point(
                 self.help_button.GetPosition().x,
@@ -565,10 +585,10 @@ class wx_python_gui:
             if self.constants.start_build_install is True:
                 self.build_install_menu()
             elif "--gui_patch" in sys.argv:
-                self.patches = sys_patch_detect.detect_root_patch(self.computer.real_model, self.constants).detect_patch_set()
+                self.patches = sys_patch_detect.DetectRootPatch(self.computer.real_model, self.constants).detect_patch_set()
                 self.root_patch_start()
             elif "--gui_unpatch" in sys.argv:
-                self.patches = sys_patch_detect.detect_root_patch(self.computer.real_model, self.constants).detect_patch_set()
+                self.patches = sys_patch_detect.DetectRootPatch(self.computer.real_model, self.constants).detect_patch_set()
                 self.root_patch_revert()
         self.finished_auto_patch = True
         self.constants.start_build_install = False
@@ -588,12 +608,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Patcher Resources", pos=(10,10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader
         self.subheader = wx.StaticText(self.frame_modal, label="Following resources are available:")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -670,12 +690,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Build and Install OpenCore", pos=(10,10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader
         self.subheader = wx.StaticText(self.frame_modal, label=f"Model: {self.constants.custom_model or self.computer.real_model}")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -699,7 +719,7 @@ class wx_python_gui:
         # Redirect stdout to a text box
         self.stdout_text = wx.TextCtrl(self.frame_modal, style=wx.TE_MULTILINE | wx.TE_READONLY)
         self.stdout_text.SetPosition(wx.Point(self.build_opencore.GetPosition().x, self.build_opencore.GetPosition().y + self.build_opencore.GetSize().height + 10))
-        self.stdout_text.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        self.stdout_text.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, ".AppleSystemUIFont"))
         # Set width to same as frame
         self.stdout_text.SetSize(self.WINDOW_WIDTH_BUILD, 340)
         # Centre the text box to top of window
@@ -729,7 +749,7 @@ class wx_python_gui:
         while self.is_unpack_finished() is False:
             time.sleep(0.1)
 
-        build.build_opencore(self.constants.custom_model or self.constants.computer.real_model, self.constants).build_opencore()
+        build.BuildOpenCore(self.constants.custom_model or self.constants.computer.real_model, self.constants)
         # Once finished, change build_opencore button to "Install OpenCore"
         self.build_opencore.SetLabel("🔩 Install OpenCore")
         self.build_opencore.Bind(wx.EVT_BUTTON, self.install_menu)
@@ -757,12 +777,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame, label="Install OpenCore")
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader: Select Disk to install OpenCore onto
         self.subheader = wx.StaticText(self.frame, label="Select Disk to install OpenCore onto")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -773,7 +793,7 @@ class wx_python_gui:
 
         # Label: If you're missing disks, ensure they're either FAT32 or formatted as GUI/GPT
         self.missing_disks = wx.StaticText(self.frame, label="Loading disks shortly...")
-        self.missing_disks.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.missing_disks.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.missing_disks.SetPosition(
             wx.Point(
                 self.subheader.GetPosition().x,
@@ -783,7 +803,7 @@ class wx_python_gui:
         self.missing_disks.Centre(wx.HORIZONTAL)
 
         self.color_note = wx.StaticText(self.frame, label="Note: Blue represent the disk OpenCore is currently booted from")
-        self.color_note.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.color_note.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.color_note.SetPosition(
             wx.Point(
                 self.missing_disks.GetPosition().x,
@@ -856,7 +876,7 @@ class wx_python_gui:
         else:
             # Label: No disks found
             self.install_button = wx.StaticText(self.frame, label="Failed to find any applicable disks")
-            self.install_button.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            self.install_button.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
             self.install_button.SetPosition(
                 wx.Point(
                     self.color_note.GetPosition().x,
@@ -896,12 +916,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Install OpenCore", pos=(10,10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader: Select Partition to install OpenCore onto
         self.subheader = wx.StaticText(self.frame_modal, label="Select Partition to install OpenCore onto")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -948,14 +968,14 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Install OpenCore", pos=(10,10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Textbox
         # Redirect stdout to a text box
         self.stdout_text = wx.TextCtrl(self.frame_modal, style=wx.TE_MULTILINE | wx.TE_READONLY)
         self.stdout_text.SetPosition(wx.Point(self.header.GetPosition().x, self.header.GetPosition().y + self.header.GetSize().height + 10))
-        self.stdout_text.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        self.stdout_text.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, ".AppleSystemUIFont"))
         # Set width to same as frame
         self.stdout_text.SetSize(self.WINDOW_WIDTH_BUILD - 40, 240)
         # Centre the text box to top of window
@@ -1041,12 +1061,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label=f"Post-Install Menu", pos=(10,10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader
         self.subheader = wx.StaticText(self.frame_modal, label="Available patches for system:")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1055,7 +1075,7 @@ class wx_python_gui:
         )
         self.subheader.Centre(wx.HORIZONTAL)
 
-        patches = sys_patch_detect.detect_root_patch(self.computer.real_model, self.constants).detect_patch_set()
+        patches = sys_patch_detect.DetectRootPatch(self.computer.real_model, self.constants).detect_patch_set()
         self.patches = patches
         can_unpatch = patches["Validation: Unpatching Possible"]
         if not any(not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True for patch in patches):
@@ -1075,7 +1095,7 @@ class wx_python_gui:
                     if (not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True):
                         logging.info(f"- Adding patch: {patch} - {patches[patch]}")
                         self.patch_label = wx.StaticText(self.frame_modal, label=f"- {patch}")
-                        self.patch_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+                        self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
                         self.patch_label.SetPosition(
                             wx.Point(
                                 self.subheader.GetPosition().x,
@@ -1085,7 +1105,7 @@ class wx_python_gui:
                         i = i + self.patch_label.GetSize().height + 3
             else:
                 self.patch_label = wx.StaticText(self.frame_modal, label=f"All applicable patches already installed")
-                self.patch_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+                self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
                 self.patch_label.SetPosition(
                     wx.Point(
                         self.subheader.GetPosition().x,
@@ -1096,7 +1116,7 @@ class wx_python_gui:
                 self.patch_label.Centre(wx.HORIZONTAL)
             if patches["Validation: Patching Possible"] is False:
                 self.patch_label = wx.StaticText(self.frame_modal, label="Cannot Patch due to following reasons:")
-                self.patch_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+                self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
                 self.patch_label.SetPosition(
                     wx.Point(
                         self.subheader.GetPosition().x,
@@ -1111,7 +1131,7 @@ class wx_python_gui:
                     if patch.startswith("Validation") and patches[patch] is True:
                         logging.info(f"- Adding check: {patch} - {patches[patch]}")
                         self.patch_label = wx.StaticText(self.frame_modal, label=f"- {patch[12:]}")
-                        self.patch_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+                        self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
                         self.patch_label.SetPosition(
                             wx.Point(
                                 self.subheader.GetPosition().x,
@@ -1119,6 +1139,32 @@ class wx_python_gui:
                             )
                         )
                         i = i + self.patch_label.GetSize().height + 3
+
+                i += 10
+                if self.constants.host_is_hackintosh is False:
+                    self.patch_label = wx.StaticText(self.frame_modal, label="Please run 'Build and Install OpenCore' and reboot")
+                    self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
+                    self.patch_label.SetPosition(
+                        wx.Point(
+                            self.subheader.GetPosition().x,
+                            self.subheader.GetPosition().y + self.subheader.GetSize().height + 3 + i
+                        )
+                    )
+                    self.patch_label.Centre(wx.HORIZONTAL)
+                    i = i + self.patch_label.GetSize().height + 3
+
+                    self.patch_label = wx.StaticText(self.frame_modal, label="to remove these errors.")
+                    self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
+                    self.patch_label.SetPosition(
+                        wx.Point(
+                            self.subheader.GetPosition().x,
+                            self.subheader.GetPosition().y + self.subheader.GetSize().height + 3 + i
+                        )
+                    )
+                    self.patch_label.Centre(wx.HORIZONTAL)
+                    i = i + self.patch_label.GetSize().height + 3
+
+
             else:
                 if self.constants.computer.oclp_sys_version and self.constants.computer.oclp_sys_date:
                     date = self.constants.computer.oclp_sys_date.split(" @")
@@ -1129,7 +1175,7 @@ class wx_python_gui:
                     patch_text = f"{self.constants.computer.oclp_sys_version}, {date}"
 
                     self.patch_label = wx.StaticText(self.frame_modal, label="Root Volume last patched:")
-                    self.patch_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+                    self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
                     self.patch_label.SetPosition(
                         wx.Point(
                             self.subheader.GetPosition().x,
@@ -1140,7 +1186,7 @@ class wx_python_gui:
                     i = i + self.patch_label.GetSize().height + 3
 
                     self.patch_label = wx.StaticText(self.frame_modal, label=patch_text)
-                    self.patch_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+                    self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
                     self.patch_label.SetPosition(
                         wx.Point(
                             self.subheader.GetPosition().x + 20,
@@ -1152,7 +1198,7 @@ class wx_python_gui:
         else:
             # Prompt user with no patches found
             self.patch_label = wx.StaticText(self.frame_modal, label="No patches needed")
-            self.patch_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            self.patch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
             self.patch_label.SetPosition(
                 wx.Point(
                     self.subheader.GetPosition().x,
@@ -1222,12 +1268,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame, label="Root Patching", pos=(10, 10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader
         self.subheader = wx.StaticText(self.frame, label="Preparing PatcherSupportPkg binaries")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1237,7 +1283,7 @@ class wx_python_gui:
         self.subheader.Centre(wx.HORIZONTAL)
 
         self.developer_note = wx.StaticText(self.frame, label="Starting shortly")
-        self.developer_note.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.developer_note.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.developer_note.SetPosition(
             wx.Point(
                 self.subheader.GetPosition().x,
@@ -1263,24 +1309,36 @@ class wx_python_gui:
             self.pulse_alternative(self.progress_bar)
             wx.GetApp().Yield()
 
-        self.progress_bar.Hide()
-
         if self.patches["Settings: Kernel Debug Kit missing"] is True:
             # Download KDK (if needed)
             self.subheader.SetLabel("Downloading Kernel Debug Kit")
             self.subheader.Centre(wx.HORIZONTAL)
             self.developer_note.SetLabel("Starting shortly")
 
+            wx.GetApp().Yield()
+
             kdk_result = False
-            kdk_obj = kdk_handler.KernelDebugKitObject(self.constants, self.constants.detected_os_build, self.constants.detected_os_version)
-            if kdk_obj.success is True:
-                kdk_download_obj = kdk_obj.retrieve_download()
+            self.kdk_obj = None
+            def kdk_thread_spawn():
+                self.kdk_obj = kdk_handler.KernelDebugKitObject(self.constants, self.constants.detected_os_build, self.constants.detected_os_version)
+
+            kdk_thread = threading.Thread(target=kdk_thread_spawn)
+            kdk_thread.start()
+
+            while kdk_thread.is_alive():
+                self.pulse_alternative(self.progress_bar)
+                wx.GetApp().Yield()
+
+            self.progress_bar.Hide()
+
+            if self.kdk_obj.success is True:
+                kdk_download_obj = self.kdk_obj.retrieve_download()
                 if not kdk_download_obj:
                     kdk_result = True
                 else:
                     kdk_download_obj.download()
 
-                    self.header.SetLabel(f"Downloading KDK Build: {kdk_obj.kdk_url_build}")
+                    self.header.SetLabel(f"Downloading KDK Build: {self.kdk_obj.kdk_url_build}")
                     self.header.Centre(wx.HORIZONTAL)
 
                     self.progress_bar.SetValue(0)
@@ -1304,7 +1362,7 @@ class wx_python_gui:
                         )
                         self.developer_note.Centre(wx.HORIZONTAL)
 
-                        self.progress_bar.SetValue(kdk_download_obj.get_percent())
+                        self.progress_bar.SetValue(int(kdk_download_obj.get_percent()))
 
                         wx.GetApp().Yield()
                         time.sleep(0.1)
@@ -1314,12 +1372,12 @@ class wx_python_gui:
                         logging.error(kdk_download_obj.error_msg)
                         error_msg = kdk_download_obj.error_msg
                     else:
-                        kdk_result = kdk_obj.validate_kdk_checksum()
-                        error_msg = kdk_obj.error_msg
+                        kdk_result = self.kdk_obj.validate_kdk_checksum()
+                        error_msg = self.kdk_obj.error_msg
             else:
                 logging.error("Failed to download KDK")
-                logging.error(kdk_obj.error_msg)
-                error_msg = kdk_obj.error_msg
+                logging.error(self.kdk_obj.error_msg)
+                error_msg = self.kdk_obj.error_msg
 
             if kdk_result is False:
                 # Create popup window to inform user of error
@@ -1338,12 +1396,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Root Patching", pos=(10, 10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader
         self.subheader = wx.StaticText(self.frame_modal, label="Starting root volume patching")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1353,7 +1411,7 @@ class wx_python_gui:
         self.subheader.Centre(wx.HORIZONTAL)
 
         self.developer_note = wx.StaticText(self.frame_modal, label="Starting shortly")
-        self.developer_note.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.developer_note.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.developer_note.SetPosition(
             wx.Point(
                 self.subheader.GetPosition().x,
@@ -1364,7 +1422,7 @@ class wx_python_gui:
 
         # Text Box
         self.text_box = wx.TextCtrl(self.frame_modal, style=wx.TE_MULTILINE | wx.TE_READONLY)
-        self.text_box.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.text_box.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.text_box.SetPosition(
             wx.Point(
                 self.developer_note.GetPosition().x,
@@ -1443,7 +1501,7 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Revert Root Patches", pos=(10, 10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader
@@ -1451,7 +1509,7 @@ class wx_python_gui:
             self.subheader = wx.StaticText(self.frame_modal, label="Currently experimental in Big Sur")
         else:
             self.subheader = wx.StaticText(self.frame_modal, label="Reverting to last sealed snapshot")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1461,7 +1519,7 @@ class wx_python_gui:
         self.subheader.Centre(wx.HORIZONTAL)
 
         self.developer_note = wx.StaticText(self.frame_modal, label="Starting shortly")
-        self.developer_note.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.developer_note.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.developer_note.SetPosition(
             wx.Point(
                 self.subheader.GetPosition().x,
@@ -1472,7 +1530,7 @@ class wx_python_gui:
 
         # Text Box
         self.text_box = wx.TextCtrl(self.frame_modal, style=wx.TE_MULTILINE | wx.TE_READONLY)
-        self.text_box.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.text_box.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.text_box.SetPosition(
             wx.Point(
                 self.developer_note.GetPosition().x,
@@ -1531,7 +1589,7 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Create macOS Installer", pos=wx.Point(10, 10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Button: Download macOS Installer
@@ -1574,12 +1632,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame, label="Pulling installer catalog")
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Label: Download...
         self.download_label = wx.StaticText(self.frame, label="Downloading installer catalog...")
-        self.download_label.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        self.download_label.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, ".AppleSystemUIFont"))
         self.download_label.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1617,7 +1675,9 @@ class wx_python_gui:
         # Download installer catalog
         if ias is None:
             def ia():
-                self.available_installers = installer.list_downloadable_macOS_installers(self.constants.payload_path, "DeveloperSeed")
+                remote_obj = macos_installer_handler.RemoteInstallerCatalog(seed_override=macos_installer_handler.SeedType.DeveloperSeed)
+                self.available_installers        = remote_obj.available_apps
+                self.available_installers_latest = remote_obj.available_apps_latest
 
             logging.info("- Downloading installer catalog...")
             thread_ia = threading.Thread(target=ia)
@@ -1636,12 +1696,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Download macOS Installer", pos=wx.Point(10, 10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader:
         self.subheader = wx.StaticText(self.frame_modal, label="Installers currently available from Apple:")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1655,7 +1715,7 @@ class wx_python_gui:
         i = -20
         if available_installers:
             if ias is None:
-                available_installers = installer.only_list_newest_installers(available_installers)
+                available_installers = self.available_installers_latest
             for app in available_installers:
                 logging.info(f"macOS {available_installers[app]['Version']} ({available_installers[app]['Build']}):\n  - Size: {utilities.human_fmt(available_installers[app]['Size'])}\n  - Source: {available_installers[app]['Source']}\n  - Variant: {available_installers[app]['Variant']}\n  - Link: {available_installers[app]['Link']}\n")
                 if available_installers[app]['Variant'] in ["DeveloperSeed" , "PublicSeed"]:
@@ -1681,10 +1741,10 @@ class wx_python_gui:
                     self.subheader.GetPosition().y + self.subheader.GetSize().height + i
                 )
             )
-            self.install_selection.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            self.install_selection.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
             self.install_selection.Centre(wx.HORIZONTAL)
 
-        self.load_all_installers = wx.Button(self.frame_modal, label="Show older installers")
+        self.load_all_installers = wx.Button(self.frame_modal, label="Show all available installers")
         self.load_all_installers.SetPosition(
             wx.Point(
                 self.install_selection.GetPosition().x,
@@ -1764,12 +1824,12 @@ class wx_python_gui:
         # Header
         self.header = wx.StaticText(self.frame, label=f"Downloading {installer_name}")
         self.frame.SetSize(self.header.GetSize().width + 200, -1)
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Label: Download...
         self.download_label = wx.StaticText(self.frame, label="Starting download shortly...")
-        self.download_label.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        self.download_label.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, ".AppleSystemUIFont"))
         self.download_label.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1779,7 +1839,7 @@ class wx_python_gui:
         self.download_label.Centre(wx.HORIZONTAL)
 
         self.download_label_2 = wx.StaticText(self.frame, label="")
-        self.download_label_2.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.download_label_2.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.download_label_2.SetPosition(
             wx.Point(
                 self.download_label.GetPosition().x,
@@ -1823,7 +1883,7 @@ class wx_python_gui:
             )
             self.download_label_2.Centre(wx.HORIZONTAL)
 
-            self.download_progress.SetValue(ia_download.get_percent())
+            self.download_progress.SetValue(int(ia_download.get_percent()))
 
             wx.GetApp().Yield()
             time.sleep(0.1)
@@ -1845,12 +1905,12 @@ class wx_python_gui:
 
         # Header: Verifying InstallAssistant.pkg
         self.header = wx.StaticText(self.frame, label="Verifying InstallAssistant.pkg")
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Label: Verifying Chunk 0 of 1200
         self.verifying_chunk_label = wx.StaticText(self.frame, label="Verifying Chunk 0 of 1200")
-        self.verifying_chunk_label.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        self.verifying_chunk_label.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, ".AppleSystemUIFont"))
         self.verifying_chunk_label.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1887,38 +1947,36 @@ class wx_python_gui:
         wx.App.Get().Yield()
         integrity_path = Path(Path(self.constants.payload_path) / Path(apple_integrity_file_link.split("/")[-1]))
 
-        if network_handler.DownloadObject(apple_integrity_file_link, integrity_path).download_simple(verify_checksum=False):
+        chunklist_stream = network_handler.NetworkUtilities().get(apple_integrity_file_link).content
+        if chunklist_stream:
             # If we're unable to download the integrity file immediately after downloading the IA, there's a legitimate issue
             # on Apple's end.
             # Fail gracefully and just head to installing the IA.
             utilities.disable_sleep_while_running()
-            apple_integrity_file = str(integrity_path)
-            chunks = integrity_verification.generate_chunklist_dict(str(apple_integrity_file))
-            if chunks:
-                max_progress = len(chunks)
-                self.progress_bar.SetValue(0)
-                self.progress_bar.SetRange(max_progress)
+            chunk_obj = integrity_verification.ChunklistVerification(self.constants.payload_path / Path("InstallAssistant.pkg"), chunklist_stream)
+            if chunk_obj.chunks:
+                self.progress_bar.SetValue(chunk_obj.current_chunk)
+                self.progress_bar.SetRange(chunk_obj.total_chunks)
 
                 wx.App.Get().Yield()
-                # See integrity_verification.py for more information on the integrity verification process
-                with Path(self.constants.payload_path / Path("InstallAssistant.pkg")).open("rb") as f:
-                    for chunk in chunks:
-                        status = hashlib.sha256(f.read(chunk["length"])).digest()
-                        if not status == chunk["checksum"]:
-                            logging.info(f"Chunk {chunks.index(chunk) + 1} checksum status FAIL: chunk sum {binascii.hexlify(chunk['checksum']).decode()}, calculated sum {binascii.hexlify(status).decode()}")
-                            self.popup = wx.MessageDialog(
-                            self.frame,
-                                f"We've found that Chunk {chunks.index(chunk) + 1} of {len(chunks)} has failed the integrity check.\n\nThis generally happens when downloading on unstable connections such as WiFi or cellular.\n\nPlease try redownloading again on a stable connection (ie. Ethernet)",
-                                "Corrupted Installer!",
-                                style = wx.OK | wx.ICON_EXCLAMATION
-                            )
-                            self.popup.ShowModal()
-                            self.main_menu()
-                            break
-                        else:
-                            self.progress_bar.SetValue(self.progress_bar.GetValue() + 1)
-                            self.verifying_chunk_label.SetLabel(f"Verifying Chunk {self.progress_bar.GetValue()} of {max_progress}")
-                            wx.App.Get().Yield()
+                chunk_obj.validate()
+
+                while chunk_obj.status == integrity_verification.ChunklistStatus.IN_PROGRESS:
+                    self.progress_bar.SetValue(chunk_obj.current_chunk)
+                    self.verifying_chunk_label.SetLabel(f"Verifying Chunk {chunk_obj.current_chunk} of {chunk_obj.total_chunks}")
+                    wx.App.Get().Yield()
+
+                if chunk_obj.status == integrity_verification.ChunklistStatus.FAILURE:
+                    self.popup = wx.MessageDialog(
+                        self.frame,
+                            f"We've found that Chunk {chunk_obj.current_chunk} of {chunk_obj.total_chunks} has failed the integrity check.\n\nThis generally happens when downloading on unstable connections such as WiFi or cellular.\n\nPlease try redownloading again on a stable connection (ie. Ethernet)",
+                            "Corrupted Installer!",
+                            style = wx.OK | wx.ICON_EXCLAMATION
+                        )
+                    self.popup.ShowModal()
+                    self.main_menu()
+
+                logging.info("Integrity check passed!")
             else:
                 logging.info("Invalid integrity file provided")
         else:
@@ -1929,7 +1987,7 @@ class wx_python_gui:
         self.header.Centre(wx.HORIZONTAL)
         self.verifying_chunk_label.SetLabel("Installing into Applications folder")
         self.verifying_chunk_label.Centre(wx.HORIZONTAL)
-        thread_install = threading.Thread(target=installer.install_macOS_installer, args=(self.constants.payload_path,))
+        thread_install = threading.Thread(target=macos_installer_handler.InstallerCreation().install_macOS_installer, args=(self.constants.payload_path,))
         thread_install.start()
         self.progress_bar.Pulse()
         while thread_install.is_alive():
@@ -1949,11 +2007,11 @@ class wx_python_gui:
         self.frame.SetSize(self.WINDOW_WIDTH_MAIN, self.WINDOW_HEIGHT_MAIN)
         # Header
         self.header = wx.StaticText(self.frame, label="Select macOS Installer")
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
         # Subheader: Installers found in /Applications
         self.subheader = wx.StaticText(self.frame, label="Searching for Installers in /Applications")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -1966,7 +2024,7 @@ class wx_python_gui:
 
         # Spawn thread to get list of installers
         def get_installers():
-            self.available_installers = installer.list_local_macOS_installers()
+            self.available_installers = macos_installer_handler.LocalInstallerCatalog().available_apps
 
         thread_get_installers = threading.Thread(target=get_installers)
         thread_get_installers.start()
@@ -2016,7 +2074,7 @@ class wx_python_gui:
             logging.info("No installers found")
             # Label: No Installers Found
             self.install_selection = wx.StaticText(self.frame, label="No Installers Found in Applications folder")
-            self.install_selection.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+            self.install_selection.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, ".AppleSystemUIFont"))
             self.install_selection.SetPosition(
                 # Set Position below header
                 wx.Point(
@@ -2044,12 +2102,12 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame, label="Format USB")
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader: Selected USB will be erased, please backup your data
         self.subheader = wx.StaticText(self.frame, label="Selected USB will be erased, please backup your data")
-        self.subheader.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        self.subheader.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -2060,7 +2118,7 @@ class wx_python_gui:
 
         # Label: Select USB
         self.usb_selection_label = wx.StaticText(self.frame, label="Missing drives? Ensure they're 14GB+ and removable")
-        self.usb_selection_label.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.usb_selection_label.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.usb_selection_label.SetPosition(
             wx.Point(
                 self.subheader.GetPosition().x,
@@ -2070,7 +2128,7 @@ class wx_python_gui:
         self.usb_selection_label.Centre(wx.HORIZONTAL)
 
         i = -15
-        available_disks = installer.list_disk_to_format()
+        available_disks = macos_installer_handler.InstallerCreation().list_disk_to_format()
         if available_disks:
             logging.info("Disks found")
             for disk in available_disks:
@@ -2089,7 +2147,7 @@ class wx_python_gui:
             logging.info("No disks found")
             # Label: No Disks Found
             self.usb_selection = wx.StaticText(self.frame, label="No Disks Found")
-            self.usb_selection.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+            self.usb_selection.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.BOLD, False, ".AppleSystemUIFont"))
             self.usb_selection.SetPosition(
                 # Set Position below header
                 wx.Point(
@@ -2116,12 +2174,12 @@ class wx_python_gui:
         self.frame.SetSize(500, -1)
         # Header
         self.header = wx.StaticText(self.frame, label=f"Creating Installer: {installer_name}")
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.Centre(wx.HORIZONTAL)
 
         # Label: Creating macOS Installer
         self.creating_macos_installer_label = wx.StaticText(self.frame, label="Formatting and flashing installer to drive")
-        self.creating_macos_installer_label.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.creating_macos_installer_label.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.creating_macos_installer_label.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -2132,7 +2190,7 @@ class wx_python_gui:
 
         # Label: Developer Note: createinstallmedia output currently not implemented
         self.developer_note_label = wx.StaticText(self.frame, label="Developer Note: Creating macOS installers can take 30min+ on slower USB drives.")
-        self.developer_note_label.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.developer_note_label.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.developer_note_label.SetPosition(
             wx.Point(
                 self.creating_macos_installer_label.GetPosition().x,
@@ -2143,7 +2201,7 @@ class wx_python_gui:
 
         # We will notify you when it's done. Do not close this window however
         self.developer_note_label_2 = wx.StaticText(self.frame, label="We will notify you when it's done, please do not close this window however")
-        self.developer_note_label_2.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.developer_note_label_2.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.developer_note_label_2.SetPosition(
             wx.Point(
                 self.developer_note_label.GetPosition().x,
@@ -2153,7 +2211,8 @@ class wx_python_gui:
         self.developer_note_label_2.Centre(wx.HORIZONTAL)
 
         # Progress Bar
-        self.progress_bar = wx.Gauge(self.frame, range=16000, size=(-1, 20))
+        max_file_size = 19000  # Best guess for installer + chainloaded packages
+        self.progress_bar = wx.Gauge(self.frame, range=max_file_size, size=(-1, 20))
         self.progress_bar.SetPosition(
             wx.Point(
                 self.developer_note_label_2.GetPosition().x,
@@ -2167,7 +2226,7 @@ class wx_python_gui:
         self.progress_bar.Centre(wx.HORIZONTAL)
 
         self.progress_label = wx.StaticText(self.frame, label="Preparing files, beginning shortly...")
-        self.progress_label.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.progress_label.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.progress_label.SetPosition(
             wx.Point(
                 self.progress_bar.GetPosition().x,
@@ -2224,12 +2283,12 @@ class wx_python_gui:
                 output = float(utilities.monitor_disk_output(disk))
                 bytes_written = output - default_output
                 if install_thread.is_alive():
-                    self.progress_bar.SetValue(bytes_written)
+                    self.progress_bar.SetValue(int(bytes_written))
                     self.progress_label.SetLabel(f"Bytes Written: {round(bytes_written, 2)}MB")
                     wx.GetApp().Yield()
                 else:
                     break
-            self.progress_bar.SetValue(16000)
+            self.progress_bar.SetValue(max_file_size)
             self.progress_label.SetLabel(f"Finished Running Installer Creation Script")
             self.progress_label.Centre(wx.HORIZONTAL)
             if self.finished_cim_process is True:
@@ -2269,12 +2328,15 @@ class wx_python_gui:
         self.return_to_main_menu.Enable()
 
     def prepare_script(self, installer_path, disk):
-        self.prepare_result = installer.generate_installer_creation_script(self.constants.payload_path, installer_path, disk)
+        self.prepare_result = macos_installer_handler.InstallerCreation().generate_installer_creation_script(self.constants.payload_path, installer_path, disk)
 
     def start_script(self):
         utilities.disable_sleep_while_running()
-        args = [self.constants.oclp_helper_path, "/bin/sh", self.constants.installer_sh_path]
-        output, error, returncode = run.Run()._stream_output(comm=args)
+        args   = [self.constants.oclp_helper_path, "/bin/sh", self.constants.installer_sh_path]
+        result = subprocess.run(args, capture_output=True, text=True)
+        output = result.stdout
+        error  = result.stderr if result.stderr else ""
+
         if "Install media now available at" in output:
             logging.info("- Successfully created macOS installer")
             while self.download_thread.is_alive():
@@ -2324,18 +2386,104 @@ class wx_python_gui:
         subprocess.run(["ditto", "-V", "-x", "-k", "--sequesterRsrc", "--rsrc", self.constants.installer_pkg_zip_path, self.constants.payload_path])
 
 
+    def _kdk_chainload(self, build: str, version: str, download_dir: str):
+        """
+        Download the correct KDK to be chainloaded in the macOS installer
+
+        Parameters
+            build (str): The build number of the macOS installer (e.g. 20A5343j)
+            version (str): The version of the macOS installer (e.g. 11.0.1)
+        """
+
+        kdk_dmg_path = Path(download_dir) / "KDK.dmg"
+        kdk_pkg_path = Path(download_dir) / "KDK.pkg"
+
+        if kdk_dmg_path.exists():
+            kdk_dmg_path.unlink()
+        if kdk_pkg_path.exists():
+            kdk_pkg_path.unlink()
+
+        logging.info("- Initiating KDK download")
+        logging.info(f"  - Build: {build}")
+        logging.info(f"  - Version: {version}")
+        logging.info(f"  - Working Directory: {download_dir}")
+
+        kdk_obj = kdk_handler.KernelDebugKitObject(self.constants, build, version, ignore_installed=True)
+        if kdk_obj.success is False:
+            logging.info("- Failed to retrieve KDK")
+            logging.info(kdk_obj.error_msg)
+            return
+
+        kdk_download_obj = kdk_obj.retrieve_download(override_path=kdk_dmg_path)
+        if kdk_download_obj is None:
+            logging.info("- Failed to retrieve KDK")
+            logging.info(kdk_obj.error_msg)
+
+        # Check remaining disk space before downloading
+        space = utilities.get_free_space(download_dir)
+        if space < (kdk_obj.kdk_url_expected_size * 2):
+            logging.info("- Not enough disk space to download and install KDK")
+            logging.info(f"- Attempting to download locally first")
+            if space < kdk_obj.kdk_url_expected_size:
+                logging.info("- Not enough disk space to install KDK, skipping")
+                return
+            # Ideally we'd download the KDK onto the disk to display progress in the UI
+            # However we'll just download to our temp directory and move it to the target disk
+            kdk_dmg_path = self.constants.kdk_download_path
+
+        kdk_download_obj.download(spawn_thread=False)
+        if kdk_download_obj.download_complete is False:
+            logging.info("- Failed to download KDK")
+            logging.info(kdk_download_obj.error_msg)
+            return
+
+        if not kdk_dmg_path.exists():
+            logging.info(f"- KDK missing: {kdk_dmg_path}")
+            return
+
+        # Now that we have a KDK, extract it to get the pkg
+        with tempfile.TemporaryDirectory() as mount_point:
+            logging.info("- Mounting KDK")
+            result = subprocess.run(["hdiutil", "attach", kdk_dmg_path, "-mountpoint", mount_point, "-nobrowse"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            if result.returncode != 0:
+                logging.info("- Failed to mount KDK")
+                logging.info(result.stdout.decode("utf-8"))
+                return
+
+            logging.info("- Copying KDK")
+            subprocess.run(["cp", "-r", f"{mount_point}/KernelDebugKit.pkg", kdk_pkg_path])
+
+            logging.info("- Unmounting KDK")
+            result = subprocess.run(["hdiutil", "detach", mount_point], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            if result.returncode != 0:
+                logging.info("- Failed to unmount KDK")
+                logging.info(result.stdout.decode("utf-8"))
+                return
+
+        logging.info("- Removing KDK Disk Image")
+        kdk_dmg_path.unlink()
+
+
     def install_installer_pkg(self, disk):
         disk = disk + "s2" # ESP sits at 1, and we know macOS will have created the main partition at 2
-        if Path(self.constants.installer_pkg_path).exists():
-            path = utilities.grab_mount_point_from_disk(disk)
-            if Path(path + "/System/Library/CoreServices/SystemVersion.plist").exists():
-                os_version = plistlib.load(Path(path + "/System/Library/CoreServices/SystemVersion.plist").open("rb"))
-                kernel_version = os_data.os_conversion.os_to_kernel(os_version["ProductVersion"])
-                if int(kernel_version) >= os_data.os_data.big_sur:
-                    subprocess.run(["mkdir", "-p", f"{path}/Library/Packages/"])
-                    subprocess.run(["cp", "-r", self.constants.installer_pkg_path, f"{path}/Library/Packages/"])
-                else:
-                    logging.info("- Installer unsupported, requires Big Sur or newer")
+
+        if not Path(self.constants.installer_pkg_path).exists():
+            return
+
+        path = utilities.grab_mount_point_from_disk(disk)
+        if not Path(path + "/System/Library/CoreServices/SystemVersion.plist").exists():
+            return
+
+        os_version = plistlib.load(Path(path + "/System/Library/CoreServices/SystemVersion.plist").open("rb"))
+        kernel_version = os_data.os_conversion.os_to_kernel(os_version["ProductVersion"])
+        if int(kernel_version) < os_data.os_data.big_sur:
+            logging.info("- Installer unsupported, requires Big Sur or newer")
+            return
+
+        subprocess.run(["mkdir", "-p", f"{path}/Library/Packages/"])
+        subprocess.run(["cp", "-r", self.constants.installer_pkg_path, f"{path}/Library/Packages/"])
+
+        self._kdk_chainload(os_version["ProductBuildVersion"], os_version["ProductVersion"], Path(path + "/Library/Packages/"))
 
 
     def settings_menu(self, event=None):
@@ -2363,13 +2511,13 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Settings", pos=wx.Point(10, 10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.SetPosition((-1, 5))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader
         self.subheader = wx.StaticText(self.frame_modal, label="Changing settings here require you")
-        self.subheader.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(
             wx.Point(
                 self.header.GetPosition().x,
@@ -2378,7 +2526,7 @@ class wx_python_gui:
         )
         self.subheader.Centre(wx.HORIZONTAL)
         self.subheader2 = wx.StaticText(self.frame_modal, label="to run 'Build and Install OpenCore'")
-        self.subheader2.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.subheader2.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.subheader2.SetPosition(
             wx.Point(
                 self.subheader.GetPosition().x,
@@ -2387,7 +2535,7 @@ class wx_python_gui:
         )
         self.subheader2.Centre(wx.HORIZONTAL)
         self.subheader3 = wx.StaticText(self.frame_modal, label="then reboot for changes to be applied")
-        self.subheader3.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.subheader3.SetFont(wx.Font(13, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, ".AppleSystemUIFont"))
         self.subheader3.SetPosition(
             wx.Point(
                 self.subheader2.GetPosition().x,
@@ -2522,11 +2670,11 @@ class wx_python_gui:
         if user_choice == self.computer.real_model:
             logging.info(f"Using Real Model: {user_choice}")
             self.constants.custom_model = None
-            defaults.generate_defaults(self.computer.real_model, True, self.constants)
+            defaults.GenerateDefaults(self.computer.real_model, True, self.constants)
         else:
             logging.info(f"Using Custom Model: {user_choice}")
             self.constants.custom_model = user_choice
-            defaults.generate_defaults(self.constants.custom_model, False, self.constants)
+            defaults.GenerateDefaults(self.constants.custom_model, False, self.constants)
         # Reload Settings
         self.settings_menu(None)
 
@@ -2612,28 +2760,28 @@ class wx_python_gui:
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Developer Settings", style=wx.ALIGN_CENTRE, pos=wx.Point(10, 10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.SetPosition(wx.Point(0, 10))
         self.header.SetSize(wx.Size(self.frame_modal.GetSize().width, 30))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader: If unfamiliar with the following settings, please do not change them.
         self.subheader = wx.StaticText(self.frame_modal, label="Do not change if unfamiliar", style=wx.ALIGN_CENTRE)
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(wx.Point(0, self.header.GetPosition().y + self.header.GetSize().height))
         self.subheader.SetSize(wx.Size(self.frame_modal.GetSize().width, 30))
         self.subheader.Centre(wx.HORIZONTAL)
 
         # Label: Set GPU Model for MXM iMacs
         self.label_model = wx.StaticText(self.frame_modal, label="Set GPU Model for MXM iMacs:", style=wx.ALIGN_CENTRE)
-        self.label_model.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.label_model.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.label_model.SetPosition(wx.Point(0, self.subheader.GetPosition().y + self.subheader.GetSize().height + 2))
         self.label_model.SetSize(wx.Size(self.frame_modal.GetSize().width, 30))
         self.label_model.Centre(wx.HORIZONTAL)
 
         # Dropdown: GPU Model
         self.gpu_dropdown = wx.Choice(self.frame_modal)
-        for gpu in ["None", "Nvidia Kepler", "AMD GCN", "AMD Polaris"]:
+        for gpu in ["None", "Nvidia Kepler", "AMD GCN", "AMD Polaris", "AMD Navi", "AMD Lexa"]:
             self.gpu_dropdown.Append(gpu)
         self.gpu_dropdown.SetSelection(0)
         self.gpu_dropdown.SetPosition(wx.Point(
@@ -2642,14 +2790,14 @@ class wx_python_gui:
         self.gpu_dropdown.Bind(wx.EVT_CHOICE, self.gpu_selection_click)
         self.gpu_dropdown.Centre(wx.HORIZONTAL)
         self.gpu_dropdown.SetToolTip(wx.ToolTip("Configures MXM GPU Vendor logic on pre-built models\nIf you are not using MXM iMacs, please leave this setting as is."))
-        models = ["iMac10,1", "iMac11,1", "iMac11,2", "iMac11,3", "iMac12,1", "iMac12,2"]
+        models = ["iMac9,1", "iMac10,1", "iMac11,1", "iMac11,2", "iMac11,3", "iMac12,1", "iMac12,2"]
         if (not self.constants.custom_model and self.computer.real_model not in models) or (self.constants.custom_model and self.constants.custom_model not in models):
             self.gpu_dropdown.Disable()
 
         # OpenCore Picker Timeout (using wxSpinCtrl)
         # Label: Picker Timeout
         self.label_timeout = wx.StaticText(self.frame_modal, label="Picker Timeout (seconds):", style=wx.ALIGN_CENTRE)
-        self.label_timeout.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.label_timeout.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.label_timeout.SetPosition(wx.Point(0, self.gpu_dropdown.GetPosition().y + self.gpu_dropdown.GetSize().height + 2))
         self.label_timeout.SetSize(wx.Size(self.frame_modal.GetSize().width, 30))
         self.label_timeout.Centre(wx.HORIZONTAL)
@@ -2669,7 +2817,7 @@ class wx_python_gui:
             self.timeout_spinner.GetPosition().y + self.timeout_spinner.GetSize().height + 5))
         self.set_amd_gop_injection.SetValue(self.constants.amd_gop_injection)
         self.set_amd_gop_injection.Bind(wx.EVT_CHECKBOX, self.amd_gop_injection_checkbox_click)
-        models = ["iMac10,1", "iMac11,1", "iMac11,2", "iMac11,3", "iMac12,1", "iMac12,2", "MacPro3,1", "MacPro4,1", "MacPro5,1", "Xserve2,1", "Xserve3,1"]
+        models = ["iMac9,1", "iMac10,1", "iMac11,1", "iMac11,2", "iMac11,3", "iMac12,1", "iMac12,2", "MacPro3,1", "MacPro4,1", "MacPro5,1", "Xserve2,1", "Xserve3,1"]
         if (not self.constants.custom_model and self.computer.real_model not in models) or (self.constants.custom_model and self.constants.custom_model not in models):
             self.set_amd_gop_injection.Disable()
 
@@ -2832,12 +2980,23 @@ class wx_python_gui:
             self.delete_unused_kdks_checkbox.GetPosition().y + self.delete_unused_kdks_checkbox.GetSize().height))
         self.set_ignore_app_updates_checkbox.SetToolTip(wx.ToolTip("This will set whether OpenCore will ignore App Updates on launch.\nEnable this option if you do not want to be prompted for App Updates"))
 
+        # Set Disable Analytics
+        res = global_settings.GlobalEnviromentSettings().read_property("DisableCrashAndAnalyticsReporting")
+        res = False if res is None else res
+        self.set_disable_analytics_checkbox = wx.CheckBox(self.frame_modal, label="Disable Crash/Analytics")
+        self.set_disable_analytics_checkbox.SetValue(res)
+        self.set_disable_analytics_checkbox.Bind(wx.EVT_CHECKBOX, self.set_disable_analytics_click)
+        self.set_disable_analytics_checkbox.SetPosition(wx.Point(
+            self.set_ignore_app_updates_checkbox.GetPosition().x,
+            self.set_ignore_app_updates_checkbox.GetPosition().y + self.set_ignore_app_updates_checkbox.GetSize().height))
+        self.set_disable_analytics_checkbox.SetToolTip(wx.ToolTip("Sets whether anonymized analytics are sent to the Dortania team.\nThis is used to help improve the application and is completely optional."))
+
         # Button: Developer Debug Info
         self.debug_button = wx.Button(self.frame_modal, label="Developer Debug Info")
         self.debug_button.Bind(wx.EVT_BUTTON, self.additional_info_menu)
         self.debug_button.SetPosition(wx.Point(
-            self.set_ignore_app_updates_checkbox.GetPosition().x,
-            self.set_ignore_app_updates_checkbox.GetPosition().y + self.set_ignore_app_updates_checkbox.GetSize().height + 5))
+            self.set_disable_analytics_checkbox.GetPosition().x,
+            self.set_disable_analytics_checkbox.GetPosition().y + self.set_disable_analytics_checkbox.GetSize().height + 5))
         self.debug_button.Center(wx.HORIZONTAL)
 
         # Button: return to main menu
@@ -2863,7 +3022,7 @@ class wx_python_gui:
         else:
             logging.info("Nuke KDKs disabled")
             self.constants.should_nuke_kdks = False
-        global_settings.global_settings().write_property("ShouldNukeKDKs", self.constants.should_nuke_kdks)
+        global_settings.GlobalEnviromentSettings().write_property("ShouldNukeKDKs", self.constants.should_nuke_kdks)
 
     def disable_library_validation_click(self, event):
         if self.disable_library_validation_checkbox.GetValue():
@@ -2886,9 +3045,12 @@ class wx_python_gui:
     def set_ignore_app_updates_click(self, event):
         self.constants.ignore_updates = self.set_ignore_app_updates_checkbox.GetValue()
         if self.constants.ignore_updates is True:
-            global_settings.global_settings().write_property("IgnoreAppUpdates", True)
+            global_settings.GlobalEnviromentSettings().write_property("IgnoreAppUpdates", True)
         else:
-            global_settings.global_settings().write_property("IgnoreAppUpdates", False)
+            global_settings.GlobalEnviromentSettings().write_property("IgnoreAppUpdates", False)
+
+    def set_disable_analytics_click(self, event):
+        global_settings.GlobalEnviromentSettings().write_property("DisableCrashAndAnalyticsReporting", self.set_disable_analytics_checkbox.GetValue())
 
     def firewire_click(self, event=None):
         if self.firewire_boot_checkbox.GetValue():
@@ -2973,21 +3135,21 @@ class wx_python_gui:
     def ts2_accel_click(self, event=None):
         if self.set_terascale_accel_checkbox.GetValue():
             logging.info("TS2 Acceleration Enabled")
-            global_settings.global_settings().write_property("MacBookPro_TeraScale_2_Accel", True)
+            global_settings.GlobalEnviromentSettings().write_property("MacBookPro_TeraScale_2_Accel", True)
             self.constants.allow_ts2_accel = True
         else:
             logging.info("TS2 Acceleration Disabled")
-            global_settings.global_settings().write_property("MacBookPro_TeraScale_2_Accel", False)
+            global_settings.GlobalEnviromentSettings().write_property("MacBookPro_TeraScale_2_Accel", False)
             self.constants.allow_ts2_accel = False
 
     def force_web_drivers_click(self, event=None):
         if self.force_web_drivers_checkbox.GetValue():
             logging.info("Force Web Drivers Enabled")
-            global_settings.global_settings().write_property("Force_Web_Drivers", True)
+            global_settings.GlobalEnviromentSettings().write_property("Force_Web_Drivers", True)
             self.constants.force_nv_web = True
         else:
             logging.info("Force Web Drivers Disabled")
-            global_settings.global_settings().write_property("Force_Web_Drivers", False)
+            global_settings.GlobalEnviromentSettings().write_property("Force_Web_Drivers", False)
             self.constants.force_nv_web = False
 
     def windows_gmux_click(self, event=None):
@@ -3064,6 +3226,10 @@ class wx_python_gui:
                 self.constants.imac_model = "Polaris"
             elif "GCN" in gpu_choice:
                 self.constants.imac_model = "Legacy GCN"
+            elif "Lexa" in gpu_choice:
+                self.constants.imac_model = "AMD Lexa"
+            elif "Navi" in gpu_choice:
+                self.constants.imac_model = "AMD Navi"
             else:
                 raise Exception("Unknown GPU Model")
         elif "Nvidia" in gpu_choice:
@@ -3107,12 +3273,12 @@ class wx_python_gui:
 
         # Header: SMBIOS Settings
         self.smbios_settings_header = wx.StaticText(self.frame_modal, label="SMBIOS Settings", pos=wx.Point(10, 10))
-        self.smbios_settings_header.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.smbios_settings_header.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.smbios_settings_header.Center(wx.HORIZONTAL)
 
         # Label: SMBIOS Spoof Level
         self.smbios_spoof_level_label = wx.StaticText(self.frame_modal, label="SMBIOS Spoof Level")
-        self.smbios_spoof_level_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.smbios_spoof_level_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.smbios_spoof_level_label.SetPosition(
             wx.Point(self.smbios_settings_header.GetPosition().x, self.smbios_settings_header.GetPosition().y + self.smbios_settings_header.GetSize().height + 10)
         )
@@ -3130,7 +3296,7 @@ class wx_python_gui:
 
         # Label: SMBIOS Spoof Model
         self.smbios_spoof_model_label = wx.StaticText(self.frame_modal, label="SMBIOS Spoof Model")
-        self.smbios_spoof_model_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.smbios_spoof_model_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.smbios_spoof_model_label.SetPosition(
             wx.Point(self.smbios_dropdown.GetPosition().x, self.smbios_dropdown.GetPosition().y + self.smbios_dropdown.GetSize().height + 10)
         )
@@ -3154,7 +3320,7 @@ class wx_python_gui:
 
         # Label: Custom Serial Number
         self.smbios_serial_label = wx.StaticText(self.frame_modal, label="Custom Serial Number")
-        self.smbios_serial_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.smbios_serial_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.smbios_serial_label.SetPosition(
             wx.Point(self.smbios_model_dropdown.GetPosition().x, self.smbios_model_dropdown.GetPosition().y + self.smbios_model_dropdown.GetSize().height + 10)
         )
@@ -3172,7 +3338,7 @@ class wx_python_gui:
 
         # Label: Custom Board Serial Number
         self.smbios_board_serial_label = wx.StaticText(self.frame_modal, label="Custom Board Serial Number")
-        self.smbios_board_serial_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.smbios_board_serial_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.smbios_board_serial_label.SetPosition(
             wx.Point(self.smbios_serial_textbox.GetPosition().x, self.smbios_serial_textbox.GetPosition().y + self.smbios_serial_textbox.GetSize().height + 10)
         )
@@ -3280,12 +3446,12 @@ class wx_python_gui:
 
         # Header: Additional Info
         self.additional_info_header = wx.StaticText(self.frame_modal, label="Developer Debug Info", pos=wx.Point(10, 10))
-        self.additional_info_header.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.additional_info_header.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.additional_info_header.Center(wx.HORIZONTAL)
 
         # Label: Real User ID
         self.real_user_id_label = wx.StaticText(self.frame_modal, label=f"Current UID: {os.getuid()} - ({os.geteuid()})")
-        self.real_user_id_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.real_user_id_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.real_user_id_label.SetPosition(
             wx.Point(self.additional_info_header.GetPosition().x, self.additional_info_header.GetPosition().y + self.additional_info_header.GetSize().height + 10)
         )
@@ -3295,7 +3461,7 @@ class wx_python_gui:
         commit_dict = self.constants.commit_info
         # Label: Built from Branch:
         self.built_from_branch_label = wx.StaticText(self.frame_modal, label=f"Branch: {commit_dict[0]}")
-        self.built_from_branch_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.built_from_branch_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.built_from_branch_label.SetPosition(
             wx.Point(self.real_user_id_label.GetPosition().x, self.real_user_id_label.GetPosition().y + self.real_user_id_label.GetSize().height + 10)
         )
@@ -3303,14 +3469,14 @@ class wx_python_gui:
 
         # Label: Built on: (Date)
         self.built_on_label = wx.StaticText(self.frame_modal, label=f"Date: {commit_dict[1]}")
-        self.built_on_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.built_on_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.built_on_label.SetPosition(
             wx.Point(self.built_from_branch_label.GetPosition().x, self.built_from_branch_label.GetPosition().y + self.built_from_branch_label.GetSize().height + 10)
         )
 
         # Label: Commit URL: (hyperlink)
         self.commit_url_label = wx.StaticText(self.frame_modal, label=f"URL:  ")
-        self.commit_url_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.commit_url_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.commit_url_label.SetPosition(
             wx.Point(self.built_on_label.GetPosition().x, self.built_on_label.GetPosition().y + self.built_on_label.GetSize().height + 10)
         )
@@ -3333,7 +3499,7 @@ class wx_python_gui:
 
         # Label: Model Dump
         self.model_dump_label = wx.StaticText(self.frame_modal, label="Model Dump")
-        self.model_dump_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.model_dump_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.model_dump_label.SetPosition(
             wx.Point(self.commit_url_label.GetPosition().x, self.commit_url_label.GetPosition().y + self.commit_url_label.GetSize().height + 10)
         )
@@ -3358,7 +3524,7 @@ class wx_python_gui:
 
         # Label: Launcher Binary
         self.launcher_binary_label = wx.StaticText(self.frame_modal, label="Launcher Binary")
-        self.launcher_binary_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.launcher_binary_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.launcher_binary_label.SetPosition(
             wx.Point(self.model_dump_textbox.GetPosition().x, self.model_dump_textbox.GetPosition().y + self.model_dump_textbox.GetSize().height + 10)
         )
@@ -3376,7 +3542,7 @@ class wx_python_gui:
 
         # Label: Launcher Script
         self.launcher_script_label = wx.StaticText(self.frame_modal, label="Payload Location")
-        self.launcher_script_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.launcher_script_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.launcher_script_label.SetPosition(
             wx.Point(self.launcher_binary_textbox.GetPosition().x, self.launcher_binary_textbox.GetPosition().y + self.launcher_binary_textbox.GetSize().height + 10)
         )
@@ -3410,13 +3576,13 @@ class wx_python_gui:
 
         # Title: Configure SIP
         self.configure_sip_title = wx.StaticText(self.frame_modal, label="Configure SIP", pos=wx.Point(10, 10))
-        self.configure_sip_title.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.configure_sip_title.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.configure_sip_title.Center(wx.HORIZONTAL)
 
         # Label: Flip individual bits corresponding to XNU's csr.h
         # If you're unfamiliar with how SIP works, do not touch this menu
         self.sip_label = wx.StaticText(self.frame_modal, label="Flip individual bits corresponding to")
-        self.sip_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.sip_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.sip_label.SetPosition(
             wx.Point(-1, self.configure_sip_title.GetPosition().y + self.configure_sip_title.GetSize().height + 10)
         )
@@ -3447,35 +3613,35 @@ class wx_python_gui:
             self.sip_value = 0x803
 
         self.sip_label_2 = wx.StaticText(self.frame_modal, label=f"Currently configured SIP: {hex(self.sip_value)}")
-        self.sip_label_2.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.sip_label_2.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.sip_label_2.SetPosition(
             wx.Point(self.sip_label.GetPosition().x, self.sip_label.GetPosition().y + self.sip_label.GetSize().height + 10)
         )
         self.sip_label_2.Center(wx.HORIZONTAL)
 
         self.sip_label_2_2 = wx.StaticText(self.frame_modal, label=f"Currently Booted SIP: {hex(py_sip_xnu.SipXnu().get_sip_status().value)}")
-        self.sip_label_2_2.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.sip_label_2_2.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.sip_label_2_2.SetPosition(
             wx.Point(self.sip_label_2.GetPosition().x, self.sip_label_2.GetPosition().y + self.sip_label_2.GetSize().height + 5)
         )
         self.sip_label_2_2.Center(wx.HORIZONTAL)
 
         self.sip_label_3 = wx.StaticText(self.frame_modal, label="For older Macs requiring root patching, we set SIP to\n be partially disabled (0x803) to allow root patching.")
-        self.sip_label_3.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.sip_label_3.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.sip_label_3.SetPosition(
             wx.Point(self.sip_label_2_2.GetPosition().x, self.sip_label_2_2.GetPosition().y + self.sip_label_2_2.GetSize().height + 10)
         )
         self.sip_label_3.Center(wx.HORIZONTAL)
 
         self.sip_label_4 = wx.StaticText(self.frame_modal, label="This value (0x803) corresponds to the following bits in csr.h:")
-        self.sip_label_4.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.sip_label_4.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.sip_label_4.SetPosition(
             wx.Point(self.sip_label_3.GetPosition().x, self.sip_label_3.GetPosition().y + self.sip_label_3.GetSize().height + 5)
         )
         self.sip_label_4.Center(wx.HORIZONTAL)
 
         self.sip_label_5 = wx.StaticText(self.frame_modal, label="      0x1  - CSR_ALLOW_UNTRUSTED_KEXTS\n      0x2  - CSR_ALLOW_UNRESTRICTED_FS\n   0x800 - CSR_ALLOW_UNAUTHENTICATED_ROOT")
-        self.sip_label_5.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.sip_label_5.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.sip_label_5.SetPosition(
             wx.Point(self.sip_label_4.GetPosition().x, self.sip_label_4.GetPosition().y + self.sip_label_4.GetSize().height + 7)
         )
@@ -3488,7 +3654,7 @@ OpenCore Legacy Patcher by default knows the most ideal
                menu can break your installation.
 """
         self.sip_label_6 = wx.StaticText(self.frame_modal, label=warning_string)
-        self.sip_label_6.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.sip_label_6.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.sip_label_6.SetPosition(
             wx.Point(self.sip_label_5.GetPosition().x, self.sip_label_5.GetPosition().y + self.sip_label_5.GetSize().height - 10)
         )
@@ -3497,7 +3663,7 @@ OpenCore Legacy Patcher by default knows the most ideal
         i = -10
         for sip_bit in sip_data.system_integrity_protection.csr_values_extended:
             self.sip_checkbox = wx.CheckBox(self.frame_modal, label=sip_data.system_integrity_protection.csr_values_extended[sip_bit]["name"])
-            self.sip_checkbox.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            self.sip_checkbox.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
             self.sip_checkbox.SetToolTip(f'Description: {sip_data.system_integrity_protection.csr_values_extended[sip_bit]["description"]}\nValue: {hex(sip_data.system_integrity_protection.csr_values_extended[sip_bit]["value"])}\nIntroduced in: macOS {sip_data.system_integrity_protection.csr_values_extended[sip_bit]["introduced_friendly"]}')
             self.sip_checkbox.SetPosition(
                 wx.Point(70, self.sip_label_6.GetPosition().y + self.sip_label_6.GetSize().height + i)
@@ -3541,27 +3707,27 @@ OpenCore Legacy Patcher by default knows the most ideal
 
         # Header
         self.header = wx.StaticText(self.frame_modal, label="Misc Settings", style=wx.ALIGN_CENTRE, pos=wx.Point(10, 10))
-        self.header.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header.SetFont(wx.Font(19, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header.SetPosition(wx.Point(0, 10))
         self.header.SetSize(wx.Size(self.frame_modal.GetSize().width, 30))
         self.header.Centre(wx.HORIZONTAL)
 
         # Subheader: If unfamiliar with the following settings, please do not change them.
         self.subheader = wx.StaticText(self.frame_modal, label="Configure settings", style=wx.ALIGN_CENTRE)
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(wx.Point(0, self.header.GetPosition().y + self.header.GetSize().height))
         self.subheader.SetSize(wx.Size(self.frame_modal.GetSize().width, 30))
         self.subheader.Centre(wx.HORIZONTAL)
         # Subheader: , hover over options more info
         self.subheader_2 = wx.StaticText(self.frame_modal, label="Hover over options for more info", style=wx.ALIGN_CENTRE)
-        self.subheader_2.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader_2.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader_2.SetPosition(wx.Point(0, self.subheader.GetPosition().y + self.subheader.GetSize().height - 15))
         self.subheader_2.SetSize(wx.Size(self.frame_modal.GetSize().width, 30))
         self.subheader_2.Centre(wx.HORIZONTAL)
 
         # Label: Set FeatureUnlock status
         self.feature_unlock_label = wx.StaticText(self.frame_modal, label="Feature Unlock Status:", style=wx.ALIGN_CENTRE)
-        self.feature_unlock_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.feature_unlock_label.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.feature_unlock_label.SetPosition(wx.Point(0, self.subheader_2.GetPosition().y + self.subheader_2.GetSize().height -5))
         self.feature_unlock_label.Centre(wx.HORIZONTAL)
 
@@ -3663,49 +3829,49 @@ OpenCore Legacy Patcher by default knows the most ideal
         # Header 1: Configure non-Metal Settings
 
         self.header_1 = wx.StaticText(self.frame_modal, label="Configure non-Metal Settings", pos=wx.Point(10, 10))
-        self.header_1.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.header_1.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, ".AppleSystemUIFont"))
         self.header_1.Centre(wx.HORIZONTAL)
 
         self.subheader = wx.StaticText(self.frame_modal, label="Below settings apply to systems that have installed")
-        self.subheader.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader.SetPosition(wx.Point(0, self.header_1.GetPosition().y + self.header_1.GetSize().height + 5))
         self.subheader.Centre(wx.HORIZONTAL)
 
         self.subheader_2 = wx.StaticText(self.frame_modal, label="non-metal acceleration patches.")
-        self.subheader_2.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader_2.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader_2.SetPosition(wx.Point(0, self.subheader.GetPosition().y + self.subheader.GetSize().height))
         self.subheader_2.Centre(wx.HORIZONTAL)
 
         # This menu will allow you to enable Beta Blur features resolving some of the UI distortions experienced with non-Metal
         self.subheader2_1 = wx.StaticText(self.frame_modal, label="This menu will allow you to enable Beta Blur features resolving")
-        self.subheader2_1.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader2_1.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader2_1.SetPosition(wx.Point(0, self.subheader_2.GetPosition().y + self.subheader_2.GetSize().height + 5))
         self.subheader2_1.Centre(wx.HORIZONTAL)
 
         self.subheader2_2 = wx.StaticText(self.frame_modal, label="some of the UI distortions experienced with non-metal GPUs.")
-        self.subheader2_2.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader2_2.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader2_2.SetPosition(wx.Point(0, self.subheader2_1.GetPosition().y + self.subheader2_1.GetSize().height))
         self.subheader2_2.Centre(wx.HORIZONTAL)
 
 
         self.subheader_4 = wx.StaticText(self.frame_modal, label="Note: Only logout and login is required to apply these settings")
-        self.subheader_4.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.subheader_4.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, ".AppleSystemUIFont"))
         self.subheader_4.SetPosition(wx.Point(0, self.subheader2_2.GetPosition().y + self.subheader2_2.GetSize().height+ 5))
         self.subheader_4.Centre(wx.HORIZONTAL)
 
-        is_dark_menu_bar = subprocess.run(["defaults", "read", "-g", "Moraea_DarkMenuBar"], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
+        is_dark_menu_bar = subprocess.run(["defaults", "read", "-g", "Moraea_DarkMenuBar"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode("utf-8").strip()
         if is_dark_menu_bar in ["1", "true"]:
             is_dark_menu_bar = True
         else:
             is_dark_menu_bar = False
 
-        is_blur_enabled = subprocess.run(["defaults", "read", "-g", "Moraea_BlurBeta"], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
+        is_blur_enabled = subprocess.run(["defaults", "read", "-g", "Moraea_BlurBeta"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode("utf-8").strip()
         if is_blur_enabled in ["1", "true"]:
             is_blur_enabled = True
         else:
             is_blur_enabled = False
 
-        is_rim_disabled = subprocess.run(["defaults", "read", "-g", "Moraea_RimBetaDisabled"], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
+        is_rim_disabled = subprocess.run(["defaults", "read", "-g", "Moraea_RimBetaDisabled"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode("utf-8").strip()
         if is_rim_disabled in ["1", "true"]:
             is_rim_disabled = True
         else:

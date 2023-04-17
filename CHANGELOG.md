@@ -1,5 +1,56 @@
 # OpenCore Legacy Patcher changelog
 
+## 0.6.5
+- Update 3802 Patchset Binaries:
+  - Resolves additional 3rd party app crashes on Metal with macOS 13.3+
+  - ex: PowerPoint's "Presentation Mode"
+- Increment Binaries:
+  - PatcherSupportPkg 0.9.6 - release
+
+## 0.6.4
+- Backend changes:
+  - Implement new analytics_handler.py module
+    - Adds support for anonymous analytics including host info (and crash reports in the future)
+    - Can be disabled via GUI or `defaults write com.dortania.opencore-legacy-patcher DisableCrashAndAnalyticsReporting -bool true`
+- Resolve Safari rendering error on Ivy Bridge in macOS 13.3+
+- Increment Binaries:
+  - RestrictEvents 1.1.1 - rolling (495f4d5)
+
+## 0.6.3
+- Update non-Metal Binaries:
+  - Resolves Safari 16.4 rendering issue
+  - Resolves left side menubar selections
+  - Implements automatic menubar text color
+  - New experimental Menubar implementation can be enabled via `defaults write -g Amy.MenuBar2Beta -bool true`
+    - Note: If you experience issues with the new implementation, you can revert back to the old implementation by running `defaults delete -g Amy.MenuBar2Beta`
+- Implement full IOUSBHostFamily downgrade for UHCI/OHCI
+  - Resolves panics on certain iMac models
+- Resolve unused KDKs not being properly cleaned up
+- Implement MXM graphics handling for iMac9,1
+  - Credit to [@Ausdauersportler](https://github.com/Ausdauersportler) for implementation
+- Resolve CoreGraphics.framework crashing on Ivy Bridge CPUs in macOS 13.3+
+  - Disables f16c sysctl reporting
+- Resolve accidental CPU renaming with RestrictEvents
+- Resolve backlight and internal display support for AMD Navi MXM GPUs
+  - Credit to [@Ausdauersportler](https://github.com/Ausdauersportler) for bug fix
+- Resolve 3rd Party Apps erroring on Metal with macOS 13.3
+  - Applicable Software: Applications directly using Metal (ex. Blender, Parallels Desktop)
+  - Applicable Hardware: 3802-based GPUs (ie. Intel Ivy Bridge and Haswell iGPUs, Nvidia Kepler dGPUs)
+- Backend changes:
+  - Use `.AppleSystemUIFont` for wxPython text rendering (thanks [@jazzzny](https://github.com/Jazzzny))
+  - Add extra error handling for network errors:
+    - Handles `RemoteDisconnected('Remote end closed connection without response')` exceptions
+  - Move root volume patch set generation to dedicated sys_patch_generate.py module
+  - Refactored integrity_verification.py:
+    - Implemented Object-Oriented design
+    - Reduced disk I/O and main thread monopolization
+- Increment Binaries:
+  - PatcherSupportPkg 0.9.3 - release
+  - OpenCorePkg 0.9.1 - release
+  - AirPortBrcmFixup 2.1.7 - release
+  - RestrictEvents 1.1.0 - release
+  - BrcmPatchRAM 2.6.5 - release
+
 ## 0.6.2
 - Work around Black Box rendering issues on certain Display Color Profiles
   - Limited to Ventura currently due to limitations with other color profiles
@@ -7,19 +58,51 @@
 - Ensure `Moraea_BlurBeta` is set on non-Metal systems
 - Implement proper Root Unpatching verification in GUI
   - Removes arbitrary patch requirements used against unpatching (ex. network connection)
+- Implement Kernel Debug Kit installation during OS installs
+  - Avoids network requirement for first time installs
+  - Paired along side AutoPkgInstaller
+- Implement Kernel Debug Kit backup system
+  - Allows for easy restoration of KDKs if OS updates corrupted installed KDKs
+- Update Wireless binaries
+  - Fixed WiFi preferences crash with legacy wifi patches
+- Update non-Metal Binaries
+  - Improved menubar blur saturation
+  - Fixed System Settings hover effects, including Bluetooth connect button
+  - Add Books hacks (reimplement cover image generation, disable broken page curl animation)
+  - Fixed unresponsive buttons
+- Implement Hardware Encoding support for AMD GCN 1-3, Polaris and Vega GPUs
+  - Applicable for pre-Haswell Macs on macOS Ventura
+  - Resolves DRM playback issues on Netflix, Disney+, etc.
+    - Note: GCN 1-3 DRM is functional, however hardware video encoding is still experimental
+      - AppleTV+ may be unstable due to this
+- Implement support for AMD Navi and Lexa MXM GPUs in 2009-2011 iMacs
+  - Primarily applicable for MXM 3.0 variants of AMD WX3200 (0x6981) and AMD RX5500XT (0x7340)
+  - Credit to [Ausdauersportler](https://github.com/Ausdauersportler) for implementation
+- Implement Continuity Camera Unlocking for pre-Kaby Lake CPUs
+  - Applicable for all legacy Macs in macOS Ventura
+- Resolve boot support for 3802-based GPUs with macOS 13.3
+  - Applicable for following GPUs:
+    - Intel Ivy Bridge and Haswell iGPUs
+    - Nvidia Kepler dGPUs
+  - Note: patchset now requires AMFI to be disabled, patchset still in active development to remove this requirement
 - Backend Changes:
   - Refactored kdk_handler.py
     - Prioritizes KdkSupportPkg repository for downloads
       - Skips calls to Apple's now defunct Developer Portal API
     - Support local loose matching when no network connection is available
+    - Implement pkg receipt verification to validate integrity of KDKs
   - Implemented logging framework usage for more reliable logging
-    - Logs are stored under `~/OpenCore-Patcher.log`
+    - Logs are stored under `~/Library/Logs/OpenCore-Patcher.log`
     - Subsequent runs are appended to the log, allowing for easy debugging
   - Implemented new network_handler.py module
     - Allows for more reliable network calls and downloads
     - Better supports network timeouts and disconnects
     - Dramatically less noise in console during downloads
-  - Remove unused sys_patch_downloader.py module
+  - Implemented new macOS Installer handler
+  - Removed unused modules:
+    - sys_patch_downloader.py
+    - run.py
+    - TUI modules
 - Build Server Changes:
   - Upgrade Python backend to 3.10.9
   - Upgrade Python modules:
@@ -29,7 +112,14 @@
     - pyinstaller - 5.7.0
     - packaging - 23.0
 - Increment Binaries:
-  - PatcherSupportPkg 0.8.3 - release
+  - PatcherSupportPkg 0.8.7 - release
+  - AutoPkgInstaller 1.0.2 - release
+  - FeatureUnlock 1.1.4 - rolling (0e8d87f)
+  - Lilu 1.6.4 - release
+  - WhateverGreen 1.6.4 - release
+  - NVMeFix 1.1.0 - release
+  - Innie 1.3.1 - release
+  - OpenCorePkg 0.9.0 - release
 
 ## 0.6.1
 - Avoid usage of KDKlessWorkaround on hardware not requiring it
